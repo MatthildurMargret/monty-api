@@ -1,8 +1,18 @@
 from fastapi import FastAPI, HTTPException, Header
 import psycopg2, os
 import math
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # later replace "*" with your website domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 conn = psycopg2.connect(os.environ["DATABASE_URL"])
 
 
