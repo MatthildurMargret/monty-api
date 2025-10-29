@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.env
+venv/
+.venv/
+
+# Environment files
+.env.local
+.env.*
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Byte-compiled / cache
+*.log
+
+# Railway
+.env
