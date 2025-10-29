@@ -30,7 +30,7 @@ def get_recommended_founders(x_api_key: str = Header(None)):
     with conn.cursor() as cur:
         cur.execute("""
             SELECT DISTINCT ON (name)
-                company_name, tree_path, company_tags
+                * 
             FROM founders
             WHERE founder = true AND history = 'recommended' AND tree_path != ''
             AND access_date != '' AND access_date IS NOT NULL
@@ -47,7 +47,7 @@ def get_unseen_founders(x_api_key: str = Header(None)):
     with conn.cursor() as cur:
         cur.execute("""
             SELECT DISTINCT ON (name)
-                company_name, tree_path, company_tags
+                *
             FROM founders
             WHERE founder = true AND history = '' 
               AND (tree_result = 'Strong recommend' OR tree_result = 'Recommend')
