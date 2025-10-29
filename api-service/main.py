@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Header
 import psycopg2, os
 
 app = FastAPI()
-conn = psycopg2.connect(os.environ["DATABASE_URL"], sslmode="require")
+conn = psycopg2.connect(os.environ["DATABASE_URL"])
 
 @app.get("/recommended-founders")
 def get_data(x_api_key: str = Header(None)):
