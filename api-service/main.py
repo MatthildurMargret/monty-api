@@ -33,6 +33,7 @@ def get_recommended_founders(x_api_key: str = Header(None)):
                 company_name, tree_path, company_tags
             FROM founders
             WHERE founder = true AND history = 'recommended'
+            AND access_date != '' AND access_date IS NOT NULL
             ORDER BY name, id DESC;
         """)
         rows = cur.fetchall()
@@ -50,6 +51,7 @@ def get_unseen_founders(x_api_key: str = Header(None)):
             FROM founders
             WHERE founder = true AND history = '' 
               AND (tree_result = 'Strong recommend' OR tree_result = 'Recommend')
+              AND access_date != '' AND access_date IS NOT NULL
             ORDER BY name, id DESC;
         """)
         rows = cur.fetchall()
