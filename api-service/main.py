@@ -32,7 +32,7 @@ def get_recommended_founders(x_api_key: str = Header(None)):
             SELECT DISTINCT ON (name)
                 company_name, tree_path, company_tags
             FROM founders
-            WHERE founder = true AND history = 'recommended'
+            WHERE founder = true AND history = 'recommended' AND tree_path != ''
             AND access_date != '' AND access_date IS NOT NULL
             ORDER BY name, id DESC;
         """)
