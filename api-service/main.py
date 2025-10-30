@@ -24,20 +24,29 @@ def sanitize_value(v):
 
 
 @app.get("/recommended-founders")
-def get_recommended_founders(x_api_key: str = Header(None)):
+def get_recommended_founders(
+    x_api_key: str = Header(None),
+    tree_path: str = Query(None)
+):
     if x_api_key != os.getenv("API_KEY"):
         raise HTTPException(status_code=403)
     with conn.cursor() as cur:
-        cur.execute("""
+        base_query = """
             SELECT DISTINCT ON (name)
                 company_name, tree_path, company_tags, profile_url, tree_result, name, location, access_date, description_1
             FROM founders
             WHERE founder = true AND history = 'recommended' AND tree_path != ''
-            AND access_date != '' AND access_date IS NOT NULL
-            ORDER BY name, id DESC;
-        """)
+              AND access_date != '' AND access_date IS NOT NULL
+        """
+        params = []
+        if tree_path:
+            base_query += " AND tree_path ILIKE %s"
+            params.append(f"{tree_path}%")
+        base_query += " ORDER BY name, id DESC;"
+        cur.execute(base_query, params)
         rows = cur.fetchall()
     return {"data": rows}
+
 
 
 @app.get("/unseen-founders")
@@ -77,7 +86,10 @@ def get_filter_options(x_api_key: str = Header(None)):
             ORDER BY tree_path;
         """)
         tree_paths = [r["tree_path"] for r in cur.fetchall()]
+
     return {"locations": locations, "tree_paths": tree_paths}
+
+
 
 
 @app.get("/search")
@@ -106,11 +118,11 @@ def search_founders(
         kw = f"%{keyword.lower()}%"
         params += [kw, kw, kw]
     if location:
-        filters.append("location = %s")
-        params.append(location)
+        filters.append("location ILIKE %s")
+        params.append(f"%{location}%")
     if tree_path:
-        filters.append("tree_path = %s")
-        params.append(tree_path)
+        filters.append("tree_path ILIKE %s")
+        params.append(f"%{tree_path}%")
     if tag:
         filters.append("LOWER(company_tags) LIKE %s")
         params.append(f"%{tag.lower()}%")
