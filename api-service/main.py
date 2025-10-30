@@ -62,11 +62,23 @@ def get_filter_options(x_api_key: str = Header(None)):
     if x_api_key != os.getenv("API_KEY"):
         raise HTTPException(status_code=403)
     with conn.cursor() as cur:
-        cur.execute("SELECT DISTINCT location FROM founders WHERE location IS NOT NULL AND location != '' ORDER BY location;")
-        locations = [r[0] for r in cur.fetchall()]
-        cur.execute("SELECT DISTINCT tree_path FROM founders WHERE tree_path IS NOT NULL AND tree_path != '' ORDER BY tree_path;")
-        tree_paths = [r[0] for r in cur.fetchall()]
+        cur.execute("""
+            SELECT DISTINCT location
+            FROM founders
+            WHERE location IS NOT NULL AND TRIM(location) <> ''
+            ORDER BY location;
+        """)
+        locations = [r["location"] for r in cur.fetchall()]
+
+        cur.execute("""
+            SELECT DISTINCT tree_path
+            FROM founders
+            WHERE tree_path IS NOT NULL AND TRIM(tree_path) <> ''
+            ORDER BY tree_path;
+        """)
+        tree_paths = [r["tree_path"] for r in cur.fetchall()]
     return {"locations": locations, "tree_paths": tree_paths}
+
 
 @app.get("/search")
 def search_founders(
