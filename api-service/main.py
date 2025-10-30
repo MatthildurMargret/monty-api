@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Query
 import psycopg2, os
 import math
 from fastapi.middleware.cors import CORSMiddleware
@@ -55,4 +55,61 @@ def get_unseen_founders(x_api_key: str = Header(None)):
             ORDER BY name, id DESC;
         """)
         rows = cur.fetchall()
+    return {"data": rows}
+
+@app.get("/filters")
+def get_filter_options(x_api_key: str = Header(None)):
+    if x_api_key != os.getenv("API_KEY"):
+        raise HTTPException(status_code=403)
+    with conn.cursor() as cur:
+        cur.execute("SELECT DISTINCT location FROM founders WHERE location IS NOT NULL AND location != '' ORDER BY location;")
+        locations = [r[0] for r in cur.fetchall()]
+        cur.execute("SELECT DISTINCT tree_path FROM founders WHERE tree_path IS NOT NULL AND tree_path != '' ORDER BY tree_path;")
+        tree_paths = [r[0] for r in cur.fetchall()]
+    return {"locations": locations, "tree_paths": tree_paths}
+
+@app.get("/search")
+def search_founders(
+    keyword: str = Query(None),
+    location: str = Query(None),
+    tag: str = Query(None),
+    tree_path: str = Query(None),
+    x_api_key: str = Header(None)
+):
+    if x_api_key != os.getenv("API_KEY"):
+        raise HTTPException(status_code=403)
+    
+    base_query = """
+        SELECT DISTINCT ON (name)
+            company_name, tree_path, company_tags, profile_url,
+            tree_result, name, location, access_date, description_1
+        FROM founders
+        WHERE founder = true
+          AND access_date != '' AND access_date IS NOT NULL
+    """
+    filters, params = [], []
+
+    if keyword:
+        filters.append("(LOWER(name) LIKE %s OR LOWER(company_name) LIKE %s OR LOWER(description_1) LIKE %s)")
+        kw = f"%{keyword.lower()}%"
+        params += [kw, kw, kw]
+    if location:
+        filters.append("location = %s")
+        params.append(location)
+    if tree_path:
+        filters.append("tree_path = %s")
+        params.append(tree_path)
+    if tag:
+        filters.append("LOWER(company_tags) LIKE %s")
+        params.append(f"%{tag.lower()}%")
+
+    if filters:
+        base_query += " AND " + " AND ".join(filters)
+    
+    base_query += " ORDER BY name, id DESC;"
+
+    with conn.cursor() as cur:
+        cur.execute(base_query, params)
+        rows = cur.fetchall()
+    
     return {"data": rows}
