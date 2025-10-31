@@ -26,26 +26,37 @@ def sanitize_value(v):
 @app.get("/recommended-founders")
 def get_recommended_founders(
     x_api_key: str = Header(None),
-    tree_path: str = Query(None)
+    tree_path: str = Query(None),
+    tree_path_prefix: str = Query(None)   # ← new param
 ):
     if x_api_key != os.getenv("API_KEY"):
         raise HTTPException(status_code=403)
+
     with conn.cursor() as cur:
         base_query = """
             SELECT DISTINCT ON (name)
-                company_name, tree_path, company_tags, profile_url, tree_result, name, location, access_date, description_1
+                company_name, tree_path, company_tags, profile_url,
+                tree_result, name, location, access_date, description_1
             FROM founders
-            WHERE founder = true AND history = 'recommended' AND tree_path != ''
-              AND access_date != '' AND access_date IS NOT NULL
+            WHERE founder = true AND history = 'recommended'
+              AND tree_path != '' AND access_date IS NOT NULL
         """
         params = []
+
+        # allow both full match and prefix match
         if tree_path:
             base_query += " AND tree_path ILIKE %s"
-            params.append(f"{tree_path}%")
+            params.append(f"%{tree_path}%")
+        elif tree_path_prefix:
+            base_query += " AND tree_path ILIKE %s"
+            params.append(f"{tree_path_prefix}%")
+
         base_query += " ORDER BY name, id DESC;"
         cur.execute(base_query, params)
         rows = cur.fetchall()
+
     return {"data": rows}
+
 
 
 
@@ -98,6 +109,7 @@ def search_founders(
     location: str = Query(None),
     tag: str = Query(None),
     tree_path: str = Query(None),
+    tree_path_prefix: str = Query(None),  # ← new optional param
     x_api_key: str = Header(None)
 ):
     if x_api_key != os.getenv("API_KEY"):
@@ -117,12 +129,21 @@ def search_founders(
         filters.append("(LOWER(name) LIKE %s OR LOWER(company_name) LIKE %s OR LOWER(description_1) LIKE %s)")
         kw = f"%{keyword.lower()}%"
         params += [kw, kw, kw]
+
     if location:
         filters.append("location ILIKE %s")
         params.append(f"%{location}%")
+
+    # Existing full match filter
     if tree_path:
         filters.append("tree_path ILIKE %s")
         params.append(f"%{tree_path}%")
+
+    # New prefix filter for hierarchical search
+    elif tree_path_prefix:
+        filters.append("tree_path ILIKE %s")
+        params.append(f"{tree_path_prefix}%")
+
     if tag:
         filters.append("LOWER(company_tags) LIKE %s")
         params.append(f"%{tag.lower()}%")
@@ -137,3 +158,4 @@ def search_founders(
         rows = cur.fetchall()
     
     return {"data": rows}
+
