@@ -36,7 +36,9 @@ def get_recommended_founders(
         base_query = """
             SELECT DISTINCT ON (name)
                 company_name, tree_path, company_tags, profile_url,
-                tree_result, name, location, access_date, description_1
+                tree_result, name, location, access_date, description_1, verticals, building_since, repeat_founder, 
+                industry_expertise_score, funding, source, technical, school_tags, past_success_indication_score,
+                product, business_stage, company_tech_score, company_website, market, tree_justification, tree_thesis, twitter, headcount, embeddednews
             FROM founders
             WHERE founder = true AND history = 'recommended'
               AND tree_path != '' AND access_date IS NOT NULL
@@ -67,7 +69,10 @@ def get_unseen_founders(x_api_key: str = Header(None)):
     with conn.cursor() as cur:
         cur.execute("""
             SELECT DISTINCT ON (name)
-                company_name, tree_path, company_tags, profile_url, tree_result, name, location, access_date, description_1
+                company_name, tree_path, company_tags, profile_url,
+                tree_result, name, location, access_date, description_1, verticals, building_since, repeat_founder, 
+                industry_expertise_score, funding, source, technical, school_tags, past_success_indication_score,
+                product, business_stage, company_tech_score, company_website, market, tree_justification, tree_thesis, twitter, headcount, embeddednews
             FROM founders
             WHERE founder = true AND history = '' 
               AND (tree_result = 'Strong recommend' OR tree_result = 'Recommend')
@@ -118,7 +123,9 @@ def search_founders(
     base_query = """
         SELECT DISTINCT ON (name)
             company_name, tree_path, company_tags, profile_url,
-            tree_result, name, location, access_date, description_1
+                tree_result, name, location, access_date, description_1, verticals, building_since, repeat_founder, 
+                industry_expertise_score, funding, source, technical, school_tags, past_success_indication_score,
+                product, business_stage, company_tech_score, company_website, market, tree_justification, tree_thesis, twitter, headcount, embeddednews
         FROM founders
         WHERE founder = true
           AND access_date != '' AND access_date IS NOT NULL
