@@ -3,6 +3,7 @@ import psycopg2, os
 import math
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2.extras import RealDictCursor
+from supabase import create_client, Client
 
 app = FastAPI()
 
@@ -15,6 +16,11 @@ app.add_middleware(
 )
 
 conn = psycopg2.connect(os.environ["DATABASE_URL"], cursor_factory=RealDictCursor)
+
+# Initialize Supabase client
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(supabase_url, supabase_key)
 
 
 def sanitize_value(v):
@@ -166,3 +172,14 @@ def search_founders(
     
     return {"data": rows}
 
+
+@app.get("/early-deals")
+def get_early_deals(x_api_key: str = Header(None)):
+    if x_api_key != os.getenv("API_KEY"):
+        raise HTTPException(status_code=403)
+    
+    try:
+        response = supabase.table("early_deals").select("*").execute()
+        return {"data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching early deals: {str(e)}")
