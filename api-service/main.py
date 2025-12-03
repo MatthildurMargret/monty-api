@@ -130,7 +130,7 @@ def search_founders(
             company_name, tree_path, company_tags, profile_url,
                 tree_result, name, location, access_date, description_1, verticals, building_since, repeat_founder, 
                 industry_expertise_score, funding, source, technical, school_tags, past_success_indication_score,
-                product, business_stage, company_tech_score, company_website, market, tree_justification, tree_thesis, twitter, headcount, embeddednews
+                product, business_stage, company_tech_score, company_website, market, tree_justification, tree_thesis, twitter, headcount, embeddednews, history
         FROM founders
         WHERE founder = true
           AND access_date != '' AND access_date IS NOT NULL
