@@ -4,6 +4,7 @@ import math
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2.extras import RealDictCursor
 from supabase import create_client, Client
+from typing import List, Optional
 
 app = FastAPI()
 
@@ -112,15 +113,13 @@ def get_filter_options(x_api_key: str = Header(None)):
     return {"locations": locations, "tree_paths": tree_paths}
 
 
-
-
 @app.get("/search")
 def search_founders(
     keyword: str = Query(None),
-    location: str = Query(None),
+    location: List[str] = Query(None),  # Changed to List[str] to accept multiple
     tag: str = Query(None),
     tree_path: str = Query(None),
-    tree_path_prefix: str = Query(None),  # ← new optional param
+    tree_path_prefix: List[str] = Query(None),  # Changed to List[str] to accept multiple
     x_api_key: str = Header(None)
 ):
     if x_api_key != os.getenv("API_KEY"):
@@ -136,6 +135,7 @@ def search_founders(
         WHERE founder = true
           AND access_date != '' AND access_date IS NOT NULL
     """
+    
     filters, params = [], []
 
     if keyword:
@@ -143,19 +143,33 @@ def search_founders(
         kw = f"%{keyword.lower()}%"
         params += [kw, kw, kw]
 
+    # Support multiple locations - match ANY of them (OR condition)
     if location:
-        filters.append("location ILIKE %s")
-        params.append(f"%{location}%")
+        if isinstance(location, str):
+            location = [location]  # Convert single value to list for consistency
+        if location:  # Check if list is not empty
+            location_filters = []
+            for loc in location:
+                location_filters.append("location ILIKE %s")
+                params.append(f"%{loc}%")
+            # Use OR to match any of the locations
+            filters.append(f"({' OR '.join(location_filters)})")
 
     # Existing full match filter
     if tree_path:
         filters.append("tree_path ILIKE %s")
         params.append(f"%{tree_path}%")
-
-    # New prefix filter for hierarchical search
+    # Multiple prefix filters - match ANY of them (OR condition)
     elif tree_path_prefix:
-        filters.append("tree_path ILIKE %s")
-        params.append(f"{tree_path_prefix}%")
+        if isinstance(tree_path_prefix, str):
+            tree_path_prefix = [tree_path_prefix]  # Convert single value to list
+        if tree_path_prefix:  # Check if list is not empty
+            prefix_filters = []
+            for prefix in tree_path_prefix:
+                prefix_filters.append("tree_path ILIKE %s")
+                params.append(f"{prefix}%")
+            # Use OR to match any of the prefixes
+            filters.append(f"({' OR '.join(prefix_filters)})")
 
     if tag:
         filters.append("LOWER(company_tags) LIKE %s")
@@ -165,7 +179,7 @@ def search_founders(
         base_query += " AND " + " AND ".join(filters)
     
     base_query += " ORDER BY name, id DESC;"
-
+    
     with conn.cursor() as cur:
         cur.execute(base_query, params)
         rows = cur.fetchall()
