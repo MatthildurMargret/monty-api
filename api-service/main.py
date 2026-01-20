@@ -47,10 +47,10 @@ def get_recommended_founders(
                 industry_expertise_score, funding, source, technical, school_tags, past_success_indication_score,
                 product, business_stage, company_tech_score, company_website, market, tree_justification, tree_thesis, twitter, headcount, embeddednews
             FROM founders
-            WHERE founder = true AND history LIKE '%recommended%'
+            WHERE founder = true AND history ILIKE %s
               AND tree_path != '' AND access_date IS NOT NULL
         """
-        params = []
+        params = ['%recommended%']
 
         # allow both full match and prefix match
         if tree_path:
