@@ -41,15 +41,16 @@ def get_recommended_founders(
 
     with conn.cursor() as cur:
         base_query = """
-            SELECT DISTINCT ON (name)
-                company_name, tree_path, company_tags, profile_url,
-                tree_result, name, location, access_date, description_1, verticals, building_since, repeat_founder, 
-                industry_expertise_score, funding, source, technical, school_tags, past_success_indication_score,
-                product, business_stage, company_tech_score, company_website, market, tree_justification, tree_thesis, twitter, headcount, embeddednews
-            FROM founders
-            WHERE founder = true AND history ILIKE %s
-              AND tree_path != '' AND access_date IS NOT NULL
-        """
+            SELECT * FROM (
+                SELECT DISTINCT ON (company_name)
+                    company_name, tree_path, company_tags, profile_url,
+                    tree_result, name, location, access_date, description_1, verticals, building_since, repeat_founder, 
+                    industry_expertise_score, funding, source, technical, school_tags, past_success_indication_score,
+                    product, business_stage, company_tech_score, company_website, market, tree_justification, tree_thesis, twitter, headcount, embeddednews
+                FROM founders
+                WHERE founder = true AND history ILIKE %s
+                AND tree_path != '' AND access_date IS NOT NULL
+            """
         params = ['%recommended%']
 
         # allow both full match and prefix match
@@ -60,7 +61,11 @@ def get_recommended_founders(
             base_query += " AND tree_path ILIKE %s"
             params.append(f"{tree_path_prefix}%")
 
-        base_query += " ORDER BY name, id DESC;"
+        base_query += """
+            ORDER BY company_name, access_date DESC NULLS LAST
+            ) sub
+            ORDER BY access_date DESC NULLS LAST;
+        """
         cur.execute(base_query, params)
         rows = cur.fetchall()
 
