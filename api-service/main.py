@@ -30,6 +30,11 @@ def sanitize_value(v):
     return v
 
 
+def sanitize_row(row):
+    """Convert RealDictRow to dict and sanitize NaN/Inf for JSON serialization."""
+    return {k: sanitize_value(v) for k, v in dict(row).items()}
+
+
 @app.get("/recommended-founders")
 def get_recommended_founders(
     x_api_key: str = Header(None),
@@ -67,7 +72,7 @@ def get_recommended_founders(
             ORDER BY access_date DESC NULLS LAST;
         """
         cur.execute(base_query, params)
-        rows = cur.fetchall()
+        rows = [sanitize_row(r) for r in cur.fetchall()]
 
     return {"data": rows}
 
@@ -89,7 +94,7 @@ def get_unseen_founders(x_api_key: str = Header(None)):
               AND access_date != '' AND access_date IS NOT NULL
             ORDER BY name, id DESC;
         """)
-        rows = cur.fetchall()
+        rows = [sanitize_row(r) for r in cur.fetchall()]
     return {"data": rows}
 
 @app.get("/filters")
@@ -103,7 +108,8 @@ def get_filter_options(x_api_key: str = Header(None)):
             WHERE location IS NOT NULL AND TRIM(location) <> ''
             ORDER BY location;
         """)
-        locations = [r["location"] for r in cur.fetchall()]
+        locations = [sanitize_value(r["location"]) for r in cur.fetchall()]
+        locations = [loc for loc in locations if loc is not None and str(loc).strip()]
 
         cur.execute("""
             SELECT DISTINCT tree_path
@@ -111,7 +117,8 @@ def get_filter_options(x_api_key: str = Header(None)):
             WHERE tree_path IS NOT NULL AND TRIM(tree_path) <> ''
             ORDER BY tree_path;
         """)
-        tree_paths = [r["tree_path"] for r in cur.fetchall()]
+        tree_paths = [sanitize_value(r["tree_path"]) for r in cur.fetchall()]
+        tree_paths = [tp for tp in tree_paths if tp is not None and str(tp).strip()]
 
     return {"locations": locations, "tree_paths": tree_paths}
 
@@ -185,7 +192,7 @@ def search_founders(
     
     with conn.cursor() as cur:
         cur.execute(base_query, params)
-        rows = cur.fetchall()
+        rows = [sanitize_row(r) for r in cur.fetchall()]
     
     return {"data": rows}
 
