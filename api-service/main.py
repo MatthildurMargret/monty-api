@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Header, Query
 import psycopg2, os
 import math
+import threading
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg2.extras import RealDictCursor
 from supabase import create_client, Client
@@ -16,7 +17,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-conn = psycopg2.connect(os.environ["DATABASE_URL"], cursor_factory=RealDictCursor)
+# --- Robust DB connection: auto-reconnects on stale/idle connection errors ---
+_conn = None
+_conn_lock = threading.Lock()
+
+def _new_conn():
+    c = psycopg2.connect(os.environ["DATABASE_URL"], cursor_factory=RealDictCursor)
+    c.autocommit = True
+    return c
+
+def run_query(fn):
+    """
+    Call fn(cursor) with automatic reconnect+retry on stale connection.
+    Retries once if the connection has gone idle (e.g. Railway idle timeout).
+    """
+    global _conn
+    for attempt in range(2):
+        with _conn_lock:
+            if _conn is None or _conn.closed != 0:
+                _conn = _new_conn()
+            cur_conn = _conn
+        try:
+            with cur_conn.cursor() as cur:
+                return fn(cur)
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            # Connection went stale — force a reconnect on next attempt
+            with _conn_lock:
+                if _conn is cur_conn:
+                    try:
+                        _conn.close()
+                    except Exception:
+                        pass
+                    _conn = None
+            if attempt == 1:
+                raise
 
 # Initialize Supabase client
 supabase_url = os.getenv("SUPABASE_URL")
@@ -44,64 +78,66 @@ def get_recommended_founders(
     if x_api_key != os.getenv("API_KEY"):
         raise HTTPException(status_code=403)
 
-    with conn.cursor() as cur:
-        base_query = """
+    base_query = """
             SELECT * FROM (
                 SELECT DISTINCT ON (company_name)
                     company_name, tree_path, company_tags, profile_url,
-                    tree_result, name, location, access_date, description_1, verticals, building_since, repeat_founder, 
+                    tree_result, name, location, access_date, description_1, verticals, building_since, repeat_founder,
                     industry_expertise_score, funding, source, technical, school_tags, past_success_indication_score,
                     product, business_stage, company_tech_score, company_website, market, tree_justification, tree_thesis, twitter, headcount, embeddednews
                 FROM founders
                 WHERE founder = true AND history ILIKE %s
                 AND tree_path != '' AND access_date IS NOT NULL
             """
-        params = ['%recommended%']
+    params = ['%recommended%']
 
-        # allow both full match and prefix match
-        if tree_path:
-            base_query += " AND tree_path ILIKE %s"
-            params.append(f"%{tree_path}%")
-        elif tree_path_prefix:
-            base_query += " AND tree_path ILIKE %s"
-            params.append(f"{tree_path_prefix}%")
+    # allow both full match and prefix match
+    if tree_path:
+        base_query += " AND tree_path ILIKE %s"
+        params.append(f"%{tree_path}%")
+    elif tree_path_prefix:
+        base_query += " AND tree_path ILIKE %s"
+        params.append(f"{tree_path_prefix}%")
 
-        base_query += """
+    base_query += """
             ORDER BY company_name, access_date DESC NULLS LAST
             ) sub
             ORDER BY access_date DESC NULLS LAST;
         """
-        cur.execute(base_query, params)
-        rows = [sanitize_row(r) for r in cur.fetchall()]
 
-    return {"data": rows}
+    def query(cur):
+        cur.execute(base_query, params)
+        return [sanitize_row(r) for r in cur.fetchall()]
+
+    return {"data": run_query(query)}
 
 
 @app.get("/unseen-founders")
 def get_unseen_founders(x_api_key: str = Header(None)):
     if x_api_key != os.getenv("API_KEY"):
         raise HTTPException(status_code=403)
-    with conn.cursor() as cur:
+    def query(cur):
         cur.execute("""
             SELECT DISTINCT ON (name)
                 company_name, tree_path, company_tags, profile_url,
-                tree_result, name, location, access_date, description_1, verticals, building_since, repeat_founder, 
+                tree_result, name, location, access_date, description_1, verticals, building_since, repeat_founder,
                 industry_expertise_score, funding, source, technical, school_tags, past_success_indication_score,
                 product, business_stage, company_tech_score, company_website, market, tree_justification, tree_thesis, twitter, headcount, embeddednews
             FROM founders
-            WHERE founder = true AND history = '' 
+            WHERE founder = true AND history = ''
               AND (tree_result = 'Strong recommend' OR tree_result = 'Recommend')
               AND access_date != '' AND access_date IS NOT NULL
             ORDER BY name, id DESC;
         """)
-        rows = [sanitize_row(r) for r in cur.fetchall()]
-    return {"data": rows}
+        return [sanitize_row(r) for r in cur.fetchall()]
+
+    return {"data": run_query(query)}
 
 @app.get("/filters")
 def get_filter_options(x_api_key: str = Header(None)):
     if x_api_key != os.getenv("API_KEY"):
         raise HTTPException(status_code=403)
-    with conn.cursor() as cur:
+    def query(cur):
         cur.execute("""
             SELECT DISTINCT location
             FROM founders
@@ -119,7 +155,9 @@ def get_filter_options(x_api_key: str = Header(None)):
         """)
         tree_paths = [sanitize_value(r["tree_path"]) for r in cur.fetchall()]
         tree_paths = [tp for tp in tree_paths if tp is not None and str(tp).strip()]
+        return locations, tree_paths
 
+    locations, tree_paths = run_query(query)
     return {"locations": locations, "tree_paths": tree_paths}
 
 
@@ -190,11 +228,11 @@ def search_founders(
     
     base_query += " ORDER BY name, id DESC;"
     
-    with conn.cursor() as cur:
+    def query(cur):
         cur.execute(base_query, params)
-        rows = [sanitize_row(r) for r in cur.fetchall()]
-    
-    return {"data": rows}
+        return [sanitize_row(r) for r in cur.fetchall()]
+
+    return {"data": run_query(query)}
 
 
 @app.get("/early-deals")
